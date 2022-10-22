@@ -634,13 +634,11 @@ lim_send_probe_rsp_mgmt_frame(struct mac_context *mac_ctx,
 			  FL("CAC timer is running, probe response dropped"));
 		return;
 	}
-	if (wlan_vdev_is_up(pe_session->vdev) != QDF_STATUS_SUCCESS)
-		return;
-
 	vdev_id = pe_session->vdev_id;
 	frm = qdf_mem_malloc(sizeof(tDot11fProbeResponse));
 	if (!frm)
 		return;
+
 	/*
 	 * Fill out 'frm', after which we'll just hand the struct off to
 	 * 'dot11f_pack_probe_response'.
@@ -1691,7 +1689,6 @@ lim_send_assoc_rsp_mgmt_frame(struct mac_context *mac_ctx,
 					true);
 
 	if (sta && lim_is_sta_eht_capable(sta) &&
-	    lim_is_mlo_conn(pe_session, sta) &&
 	    lim_is_session_eht_capable(pe_session) &&
 	    wlan_vdev_mlme_is_mlo_ap(pe_session->vdev)) {
 		pe_debug("Populate mlo IEs");
@@ -2187,16 +2184,15 @@ lim_send_assoc_req_mgmt_frame(struct mac_context *mac_ctx,
 	uint32_t ie_offset = 0;
 	uint8_t *p_ext_cap = NULL;
 	tDot11fIEExtCap bcn_ext_cap;
-	uint8_t *bcn_ie = NULL, *fils_hlp_ie = NULL;
+	uint8_t *bcn_ie = NULL;
 	uint32_t bcn_ie_len = 0;
 	uint32_t aes_block_size_len = 0;
 	enum rateid min_rid = RATEID_DEFAULT;
 	uint8_t *mbo_ie = NULL, *adaptive_11r_ie = NULL, *vendor_ies = NULL;
 	uint8_t mbo_ie_len = 0, adaptive_11r_ie_len = 0, rsnx_ie_len = 0;
 	uint8_t mscs_ext_ie_len = 0;
-	bool bss_mfp_capable, frag_ie_present = false;
+	bool bss_mfp_capable;
 	int8_t peer_rssi = 0;
-	uint16_t fils_hlp_ie_len = 0;
 
 	if (!pe_session) {
 		pe_err("pe_session is NULL");
@@ -2538,43 +2534,6 @@ lim_send_assoc_req_mgmt_frame(struct mac_context *mac_ctx,
 	if (lim_is_fils_connection(pe_session)) {
 		populate_dot11f_fils_params(mac_ctx, frm, pe_session);
 		aes_block_size_len = AES_BLOCK_SIZE;
-		if (wlan_get_ie_ptr_from_eid(WLAN_ELEMID_FRAGMENT,
-					     add_ie, add_ie_len))
-			frag_ie_present = true;
-	}
-
-	/* Strip and append HLP container IE only if it is fragmented */
-	if (frag_ie_present &&
-	    wlan_get_ext_ie_ptr_from_ext_id(SIR_FILS_HLP_OUI_TYPE,
-					    SIR_FILS_HLP_OUI_LEN, add_ie,
-					    add_ie_len)) {
-		fils_hlp_ie = qdf_mem_malloc(SIR_FILS_HLP_IE_LEN);
-		if (!fils_hlp_ie)
-			goto end;
-
-		qdf_status =
-			lim_strip_ie(mac_ctx, add_ie, &add_ie_len,
-				     WLAN_ELEMID_EXTN_ELEM, ONE_BYTE,
-				     SIR_FILS_HLP_OUI_TYPE,
-				     SIR_FILS_HLP_OUI_LEN, fils_hlp_ie,
-				     SIR_FILS_HLP_IE_LEN - 2);
-		if (QDF_IS_STATUS_ERROR(qdf_status)) {
-			pe_err("Failed to strip FILS HLP container IE");
-			goto end;
-		}
-		fils_hlp_ie_len = fils_hlp_ie[1] + 2;
-
-		current_len = add_ie_len;
-		qdf_status =
-			lim_strip_ie(mac_ctx, add_ie, &add_ie_len,
-				     WLAN_ELEMID_FRAGMENT, ONE_BYTE,
-				     NULL, 0, &fils_hlp_ie[fils_hlp_ie_len],
-				     SIR_FILS_HLP_IE_LEN - fils_hlp_ie_len - 2);
-		if (QDF_IS_STATUS_ERROR(qdf_status)) {
-			pe_err("Failed to strip fragment IE of HLP container IE");
-			goto end;
-		}
-		fils_hlp_ie_len += current_len - add_ie_len;
 	}
 
 	/* RSNX IE for SAE PWE derivation based on H2E */
@@ -2715,7 +2674,7 @@ lim_send_assoc_req_mgmt_frame(struct mac_context *mac_ctx,
 
 	bytes = payload + sizeof(tSirMacMgmtHdr) + aes_block_size_len +
 		rsnx_ie_len + mbo_ie_len + adaptive_11r_ie_len +
-		mscs_ext_ie_len + vendor_ie_len + fils_hlp_ie_len;
+		mscs_ext_ie_len + vendor_ie_len;
 
 	qdf_status = cds_packet_alloc((uint16_t) bytes, (void **)&frame,
 				(void **)&packet);
@@ -2753,12 +2712,6 @@ lim_send_assoc_req_mgmt_frame(struct mac_context *mac_ctx,
 		goto end;
 	} else if (DOT11F_WARNED(status)) {
 		pe_warn("Assoc request pack warning (0x%08x)", status);
-	}
-
-	if (fils_hlp_ie && fils_hlp_ie_len) {
-		qdf_mem_copy(frame + sizeof(tSirMacMgmtHdr) + payload,
-			     fils_hlp_ie, fils_hlp_ie_len);
-		payload = payload + fils_hlp_ie_len;
 	}
 
 	if (rsnx_ie && rsnx_ie_len) {
@@ -2864,7 +2817,6 @@ lim_send_assoc_req_mgmt_frame(struct mac_context *mac_ctx,
 	}
 
 end:
-	qdf_mem_free(fils_hlp_ie);
 	qdf_mem_free(rsnx_ie);
 	qdf_mem_free(vendor_ies);
 	qdf_mem_free(mbo_ie);
@@ -5311,7 +5263,7 @@ returnAfterError:
 	return status_code;
 }
 
-bool
+static bool
 lim_is_self_and_peer_ocv_capable(struct mac_context *mac,
 				 uint8_t *peer,
 				 struct pe_session *pe_session)
@@ -5333,7 +5285,7 @@ lim_is_self_and_peer_ocv_capable(struct mac_context *mac,
 	return false;
 }
 
-void
+static void
 lim_fill_oci_params(struct mac_context *mac, struct pe_session *session,
 		    tDot11fIEoci *oci)
 {
@@ -5652,14 +5604,12 @@ QDF_STATUS lim_send_addba_response_frame(struct mac_context *mac_ctx,
 	uint8_t tx_flag = 0;
 	uint8_t vdev_id = 0;
 	uint16_t buff_size, status_code, batimeout;
-	uint16_t frm_buff_size = 0;
 	uint8_t dialog_token;
 	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
 	uint8_t he_frag = 0;
 	tpDphHashNode sta_ds = NULL;
 	uint16_t aid;
 	bool he_cap = false, peer_he_cap = false;
-	bool eht_cap = false;
 	struct wlan_mlme_qos *qos_aggr;
 
 	vdev_id = session->vdev_id;
@@ -5678,72 +5628,49 @@ QDF_STATUS lim_send_addba_response_frame(struct mac_context *mac_ctx,
 
 	sta_ds = dph_lookup_hash_entry(mac_ctx, peer_mac, &aid,
 				       &session->dph.dphHashTable);
-	if (sta_ds && lim_is_session_he_capable(session))
-		he_cap = lim_is_sta_he_capable(sta_ds);
-
-	if (sta_ds && lim_is_session_eht_capable(session))
-		eht_cap = lim_is_sta_eht_capable(sta_ds);
-
 	if ((LIM_IS_STA_ROLE(session) && qos_aggr->rx_aggregation_size == 1 &&
 	    !mac_ctx->usr_cfg_ba_buff_size) || mac_ctx->reject_addba_req) {
 		frm.Status.status = STATUS_REQUEST_DECLINED;
 		pe_err("refused addba req for rx_aggregation_size: %d mac_ctx->reject_addba_req: %d",
 		       qos_aggr->rx_aggregation_size, mac_ctx->reject_addba_req);
 	} else if (LIM_IS_STA_ROLE(session) && !mac_ctx->usr_cfg_ba_buff_size) {
-		frm_buff_size =
+		frm.addba_param_set.buff_size =
 			QDF_MIN(qos_aggr->rx_aggregation_size, calc_buff_size);
-		pe_debug("rx_aggregation_size %d, calc_buff_size %d",
-			 qos_aggr->rx_aggregation_size, calc_buff_size);
-
-		if (eht_cap) {
-			if (frm_buff_size > MAX_EHT_BA_BUFF_SIZE)
-				frm_buff_size = MAX_EHT_BA_BUFF_SIZE;
-		} else {
-			if (frm_buff_size > MAX_BA_BUFF_SIZE)
-				frm_buff_size = MAX_BA_BUFF_SIZE;
-		}
 	} else {
+		if (sta_ds && lim_is_session_he_capable(session))
+			he_cap = lim_is_sta_he_capable(sta_ds);
+
 		if (sta_ds && sta_ds->staType == STA_ENTRY_NDI_PEER)
-			frm_buff_size = calc_buff_size;
-		else if (eht_cap)
-			frm_buff_size = MAX_EHT_BA_BUFF_SIZE;
+			frm.addba_param_set.buff_size = calc_buff_size;
 		else if (he_cap)
-			frm_buff_size = MAX_BA_BUFF_SIZE;
+			frm.addba_param_set.buff_size = MAX_BA_BUFF_SIZE;
 		else
-			frm_buff_size = SIR_MAC_BA_DEFAULT_BUFF_SIZE;
+			frm.addba_param_set.buff_size =
+					SIR_MAC_BA_DEFAULT_BUFF_SIZE;
 
 		if (mac_ctx->usr_cfg_ba_buff_size)
-			frm_buff_size = mac_ctx->usr_cfg_ba_buff_size;
+			frm.addba_param_set.buff_size =
+					mac_ctx->usr_cfg_ba_buff_size;
 
-		if (eht_cap) {
-			if (frm_buff_size > MAX_EHT_BA_BUFF_SIZE)
-				frm_buff_size = MAX_EHT_BA_BUFF_SIZE;
-		} else {
-			if (frm_buff_size > MAX_BA_BUFF_SIZE)
-				frm_buff_size = MAX_BA_BUFF_SIZE;
-		}
+		if (frm.addba_param_set.buff_size > MAX_BA_BUFF_SIZE)
+			frm.addba_param_set.buff_size = MAX_BA_BUFF_SIZE;
 
-		if (frm_buff_size > SIR_MAC_BA_DEFAULT_BUFF_SIZE) {
+		if (frm.addba_param_set.buff_size > SIR_MAC_BA_DEFAULT_BUFF_SIZE) {
 			if (session->active_ba_64_session) {
-				frm_buff_size = SIR_MAC_BA_DEFAULT_BUFF_SIZE;
+				frm.addba_param_set.buff_size =
+					SIR_MAC_BA_DEFAULT_BUFF_SIZE;
 			}
 		} else if (!session->active_ba_64_session) {
 			session->active_ba_64_session = true;
 		}
-		if (buff_size && frm_buff_size > buff_size) {
+		if (buff_size && (frm.addba_param_set.buff_size > buff_size)) {
 			pe_debug("buff size: %d larger than peer's capability: %d",
-				 frm_buff_size, buff_size);
-			frm_buff_size = buff_size;
+				 frm.addba_param_set.buff_size, buff_size);
+			frm.addba_param_set.buff_size = buff_size;
 		}
 	}
 
-	/* In case where AP advertizes BA window size which is different
-	 * than our max supported BA window size.
-	 */
-	cdp_tid_update_ba_win_size(soc, peer_mac, vdev_id, tid, frm_buff_size);
-
 	frm.addba_param_set.tid = tid;
-	frm.addba_param_set.buff_size = frm_buff_size % MAX_EHT_BA_BUFF_SIZE;
 	if (sta_ds)
 		peer_he_cap = lim_is_sta_he_capable(sta_ds);
 
@@ -5762,9 +5689,6 @@ QDF_STATUS lim_send_addba_response_frame(struct mac_context *mac_ctx,
 	if (addba_extn_present) {
 		frm.addba_extn_element.present = 1;
 		frm.addba_extn_element.no_fragmentation = 1;
-		/* addba_extn_element should be updated per 11be spec */
-		frm.addba_extn_element.reserved =
-				(frm_buff_size / MAX_EHT_BA_BUFF_SIZE) << 2;
 		if (lim_is_session_he_capable(session)) {
 			he_frag = lim_get_session_he_frag_cap(session);
 			if (he_frag != 0) {
@@ -5782,12 +5706,11 @@ QDF_STATUS lim_send_addba_response_frame(struct mac_context *mac_ctx,
 		 tid, frm.DialogToken.token, frm.Status.status,
 		 frm.addba_param_set.buff_size,
 		 frm.addba_param_set.amsdu_supp);
-	pe_debug("addba_extn %d he_capable %d no_frag %d he_frag %d, exted buff size %d",
-		 addba_extn_present,
-		 lim_is_session_he_capable(session),
-		 frm.addba_extn_element.no_fragmentation,
-		 frm.addba_extn_element.he_frag_operation,
-		 frm.addba_extn_element.reserved >> 2);
+	pe_debug("addba_extn %d he_capable %d no_frag %d he_frag %d",
+		addba_extn_present,
+		lim_is_session_he_capable(session),
+		frm.addba_extn_element.no_fragmentation,
+		frm.addba_extn_element.he_frag_operation);
 
 	status = dot11f_get_packed_addba_rsp_size(mac_ctx, &frm, &payload_size);
 	if (DOT11F_FAILED(status)) {

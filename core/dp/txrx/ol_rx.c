@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1707,7 +1706,7 @@ ol_rx_in_order_indication_handler(ol_txrx_pdev_handle pdev,
 }
 #endif
 
-#ifdef CONNECTIVITY_PKTLOG
+#ifndef REMOVE_PKT_LOG
 /**
  * ol_rx_pkt_dump_call() - updates status and
  * calls packetdump callback to log rx packet
@@ -1752,7 +1751,7 @@ void ol_rx_pkt_dump_call(
 	if (packetdump_cb &&
 	    wlan_op_mode_sta == peer->vdev->opmode)
 		packetdump_cb(soc_hdl, OL_TXRX_PDEV_ID, peer->vdev->vdev_id,
-			      msdu, status, QDF_RX_DATA_PKT);
+			      msdu, status, RX_DATA_PKT);
 }
 #endif
 

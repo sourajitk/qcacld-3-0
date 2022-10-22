@@ -321,7 +321,7 @@ struct csr_roamstruct {
 	int32_t sPendingCommands;
 	struct csr_roam_session *roamSession;
 #if defined(WLAN_LOGGING_SOCK_SVC_ENABLE) && \
-	defined(CONNECTIVITY_PKTLOG)
+	defined(FEATURE_PKTLOG) && !defined(REMOVE_PKT_LOG)
 	qdf_mc_timer_t packetdump_timer;
 #endif
 	spinlock_t roam_state_lock;

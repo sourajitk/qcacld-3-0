@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1484,7 +1483,7 @@ htt_rx_amsdu_rx_in_order_pop_ll(htt_pdev_handle pdev,
 	uint8_t offload_ind, frag_ind;
 	uint8_t peer_id;
 	struct htt_host_rx_desc_base *rx_desc = NULL;
-	enum qdf_dp_tx_rx_status status = QDF_TX_RX_STATUS_OK;
+	enum rx_pkt_fate status = RX_PKT_FATE_SUCCESS;
 	qdf_dma_addr_t paddr;
 	qdf_mem_info_t mem_map_table = {0};
 	int ret = 1;
@@ -1647,7 +1646,7 @@ htt_rx_amsdu_rx_in_order_pop_ll(htt_pdev_handle pdev,
 		if (pdev->rx_pkt_dump_cb) {
 			if (qdf_unlikely(RX_DESC_MIC_ERR_IS_SET &&
 					 !RX_DESC_DISCARD_IS_SET))
-				status = QDF_TX_RX_STATUS_FW_DISCARD;
+				status = RX_PKT_FATE_FW_DROP_INVALID;
 			pdev->rx_pkt_dump_cb(msdu, peer_id, status);
 		}
 

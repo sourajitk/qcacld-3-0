@@ -507,10 +507,6 @@ ifeq ($(CONFIG_QCACLD_WLAN_CONNECTIVITY_LOGGING), y)
 HDD_OBJS += $(HDD_SRC_DIR)/wlan_hdd_connectivity_logging.o
 endif
 
-ifeq ($(CONFIG_DP_HW_TX_DELAY_STATS_ENABLE), y)
-HDD_OBJS += $(HDD_SRC_DIR)/wlan_hdd_sysfs_dp_tx_delay_stats.o
-endif
-
 $(call add-wlan-objs,hdd,$(HDD_OBJS))
 
 ###### OSIF_SYNC ########
@@ -3136,8 +3132,6 @@ cppflags-$(CONFIG_WLAN_FASTPATH) +=	-DWLAN_FEATURE_FASTPATH
 
 cppflags-$(CONFIG_FEATURE_PKTLOG) +=     -DFEATURE_PKTLOG
 
-cppflags-$(CONFIG_CONNECTIVITY_PKTLOG) += -DCONNECTIVITY_PKTLOG
-
 ifeq ($(CONFIG_WLAN_NAPI), y)
 cppflags-y += -DFEATURE_NAPI
 cppflags-y += -DHIF_IRQ_AFFINITY
@@ -3759,7 +3753,6 @@ cppflags-$(CONFIG_DP_HW_COOKIE_CONVERT_EXCEPTION) += -DDP_HW_COOKIE_CONVERT_EXCE
 cppflags-$(CONFIG_TX_ADDR_INDEX_SEARCH) += -DTX_ADDR_INDEX_SEARCH
 
 cppflags-$(CONFIG_RX_HASH_DEBUG) += -DRX_HASH_DEBUG
-cppflags-$(CONFIG_NO_RX_PKT_HDR_TLV) += -DNO_RX_PKT_HDR_TLV
 
 ifeq ($(CONFIG_QCA6290_11AX), y)
 cppflags-y += -DQCA_WIFI_QCA6290_11AX -DQCA_WIFI_QCA6290_11AX_MU_UL
@@ -3912,9 +3905,6 @@ cppflags-$(CONFIG_ADAPTIVE_11R) += -DWLAN_ADAPTIVE_11R
 
 #Flag to enable/disable sae single pmk feature feature
 cppflags-$(CONFIG_SAE_SINGLE_PMK) += -DWLAN_SAE_SINGLE_PMK
-
-#Flag to enable/disable multi client low latency feature support
-cppflags-$(CONFIG_MULTI_CLIENT_LL_SUPPORT) += -DMULTI_CLIENT_LL_SUPPORT
 
 #Flag to enable/disable mscs feature
 cppflags-$(CONFIG_FEATURE_MSCS) += -DWLAN_FEATURE_MSCS
@@ -4321,10 +4311,6 @@ cppflags-$(CONFIG_DP_TX_TRACKING) += -DDP_TX_TRACKING
 
 ifdef CONFIG_CHIP_VERSION
 ccflags-y += -DCHIP_VERSION=$(CONFIG_CHIP_VERSION)
-endif
-
-ifeq ($(CONFIG_DP_HW_TX_DELAY_STATS_ENABLE), y)
-cppflags-y += -DHW_TX_DELAY_STATS_ENABLE
 endif
 
 KBUILD_CPPFLAGS += $(cppflags-y)

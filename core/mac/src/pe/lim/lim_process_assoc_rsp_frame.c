@@ -48,8 +48,6 @@
 #include "wlan_connectivity_logging.h"
 #include <lim_mlo.h>
 #include "parser_api.h"
-#include "wlan_action_oui_ucfg_api.h"
-#include "wlan_action_oui_public_struct.h"
 
 /**
  * lim_update_stads_htcap() - Updates station Descriptor HT capability
@@ -145,7 +143,6 @@ void lim_update_assoc_sta_datas(struct mac_context *mac_ctx,
 	tDot11fIEhe_cap *he_cap = NULL;
 	tDot11fIEeht_cap *eht_cap = NULL;
 	struct bss_description *bss_desc = NULL;
-	tDot11fIEVHTOperation *vht_oper = NULL;
 
 	lim_get_phy_mode(mac_ctx, &phy_mode, session_entry);
 	sta_ds->staType = STA_ENTRY_SELF;
@@ -162,13 +159,10 @@ void lim_update_assoc_sta_datas(struct mac_context *mac_ctx,
 		lim_update_stads_htcap(mac_ctx, sta_ds, assoc_rsp,
 				       session_entry);
 
-	if (assoc_rsp->VHTCaps.present) {
+	if (assoc_rsp->VHTCaps.present)
 		vht_caps = &assoc_rsp->VHTCaps;
-		vht_oper = &assoc_rsp->VHTOperation;
-	} else if (assoc_rsp->vendor_vht_ie.VHTCaps.present) {
+	else if (assoc_rsp->vendor_vht_ie.VHTCaps.present)
 		vht_caps = &assoc_rsp->vendor_vht_ie.VHTCaps;
-		vht_oper = &assoc_rsp->vendor_vht_ie.VHTOperation;
-	}
 
 	if (session_entry->vhtCapability && (vht_caps && vht_caps->present)) {
 		sta_ds->mlmStaContext.vhtCapability =
@@ -181,16 +175,13 @@ void lim_update_assoc_sta_datas(struct mac_context *mac_ctx,
 		 */
 		sta_ds->htMaxRxAMpduFactor = vht_caps->maxAMPDULenExp;
 		if (session_entry->htSupportedChannelWidthSet) {
-			if (vht_oper && vht_oper->present)
+			if (assoc_rsp->VHTOperation.present)
 				sta_ds->vhtSupportedChannelWidthSet =
-				       lim_get_vht_ch_width(vht_caps,
-							    vht_oper,
-							    &assoc_rsp->HTInfo);
+					assoc_rsp->VHTOperation.chanWidth;
 			else
 				sta_ds->vhtSupportedChannelWidthSet =
-					WNI_CFG_VHT_CHANNEL_WIDTH_20_40MHZ;
+					eHT_CHANNEL_WIDTH_40MHZ;
 		}
-
 		sta_ds->vht_mcs_10_11_supp = 0;
 		if (mac_ctx->mlme_cfg->vht_caps.vht_cap_info.
 		    vht_mcs_10_11_supp &&
@@ -306,14 +297,6 @@ void lim_update_assoc_sta_datas(struct mac_context *mac_ctx,
 	}
 	if (session_entry->limRmfEnabled)
 		sta_ds->rmfEnabled = 1;
-
-	if (session_entry->vhtCapability && assoc_rsp->oper_mode_ntf.present) {
-		/**
-		 * OMN IE is present in the Assoc response, but the channel
-		 * width/Rx NSS update will happen through the peer_assoc cmd.
-		 */
-		pe_debug("OMN IE is present in the assoc response frame");
-	}
 }
 
 /**
@@ -859,8 +842,6 @@ lim_process_assoc_rsp_frame(struct mac_context *mac_ctx, uint8_t *rx_pkt_info,
 	QDF_STATUS status;
 	enum ani_akm_type auth_type;
 	bool sha384_akm;
-	bool bad_ap;
-	struct action_oui_search_attr attr = {0};
 
 	assoc_cnf.resultCode = eSIR_SME_SUCCESS;
 	/* Update PE session Id */
@@ -1311,25 +1292,8 @@ lim_process_assoc_rsp_frame(struct mac_context *mac_ctx, uint8_t *rx_pkt_info,
 	lim_update_assoc_sta_datas(mac_ctx, sta_ds, assoc_rsp,
 				   session_entry, beacon);
 
-	/*
-	 * One special AP sets MU EDCA timer as 255 wrongly in both beacon and
-	 * assoc rsp, lead to 2 sec SU upload data stall periodically.
-	 * To fix it, reset MU EDCA timer to 1 and config to F/W for such AP.
-	 */
 	if (lim_is_session_he_capable(session_entry)) {
-		attr.ie_data = ie;
-		attr.ie_length = ie_len;
-		bad_ap = ucfg_action_oui_search(mac_ctx->psoc,
-						&attr,
-						ACTION_OUI_DISABLE_MU_EDCA);
 		session_entry->mu_edca_present = assoc_rsp->mu_edca_present;
-		if (session_entry->mu_edca_present && bad_ap) {
-			pe_debug("IoT AP with bad mu edca timer, reset to 1");
-			assoc_rsp->mu_edca.acbe.mu_edca_timer = 1;
-			assoc_rsp->mu_edca.acbk.mu_edca_timer = 1;
-			assoc_rsp->mu_edca.acvi.mu_edca_timer = 1;
-			assoc_rsp->mu_edca.acvo.mu_edca_timer = 1;
-		}
 		if (session_entry->mu_edca_present) {
 			pe_debug("Save MU EDCA params to session");
 			session_entry->ap_mu_edca_params[QCA_WLAN_AC_BE] =

@@ -793,7 +793,7 @@ typedef void (*sme_get_raom_scan_ch_callback)(
 				void *context);
 
 #if defined(WLAN_LOGGING_SOCK_SVC_ENABLE) && \
-	defined(CONNECTIVITY_PKTLOG)
+	defined(FEATURE_PKTLOG) && !defined(REMOVE_PKT_LOG)
 /**
  * csr_packetdump_timer_stop() - stops packet dump timer
  *

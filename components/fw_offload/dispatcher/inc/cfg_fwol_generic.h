@@ -874,7 +874,7 @@
 /*
  * <ini>
  * g_enable_pci_gen - To enable pci gen switch
- * @Default: 1
+ * @Default: 0
  *
  * Related: None
  *
@@ -887,7 +887,7 @@
 
 #define CFG_ENABLE_PCI_GEN CFG_INI_BOOL( \
 		"g_enable_pci_gen", \
-		1, \
+		0, \
 		"enable pci gen")
 
 #define CFG_FWOL_GENERIC_ALL \

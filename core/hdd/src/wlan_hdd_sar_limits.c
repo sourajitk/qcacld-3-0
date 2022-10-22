@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1008,11 +1008,9 @@ static void hdd_sar_unsolicited_work_cb(void *user_data)
 
 	if (errno == -EAGAIN) {
 		hdd_nofl_debug("rescheduling sar unsolicited work");
-		status = qdf_delayed_work_create(&hdd_ctx->sar_safety_unsolicited_work,
-						 hdd_sar_unsolicited_work_cb,
-						 hdd_ctx);
-		if (QDF_IS_STATUS_ERROR(status))
-			hdd_err("failed to create sar safety unsolicited work");
+		qdf_delayed_work_create(&hdd_ctx->sar_safety_unsolicited_work,
+					hdd_sar_unsolicited_work_cb,
+					hdd_ctx);
 		return;
 	} else if (errno) {
 		hdd_err("cannot handle sar unsolicited work");
@@ -1092,8 +1090,6 @@ void wlan_hdd_sar_timers_reset(struct hdd_context *hdd_ctx)
 
 void wlan_hdd_sar_timers_init(struct hdd_context *hdd_ctx)
 {
-	QDF_STATUS status;
-
 	if (!hdd_ctx->config->enable_sar_safety)
 		return;
 
@@ -1102,19 +1098,13 @@ void wlan_hdd_sar_timers_init(struct hdd_context *hdd_ctx)
 	qdf_mc_timer_init(&hdd_ctx->sar_safety_timer, QDF_TIMER_TYPE_SW,
 			  hdd_sar_safety_timer_cb, hdd_ctx);
 
-	status = qdf_delayed_work_create(&hdd_ctx->sar_safety_unsolicited_work,
-					 hdd_sar_unsolicited_work_cb,
-					 hdd_ctx);
-
-	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("failed to create sar safety unsolicited work");
-		goto hdd_exit;
-	}
+	qdf_delayed_work_create(&hdd_ctx->sar_safety_unsolicited_work,
+				hdd_sar_unsolicited_work_cb,
+				hdd_ctx);
 
 	qdf_atomic_init(&hdd_ctx->sar_safety_req_resp_event_in_progress);
 	qdf_event_create(&hdd_ctx->sar_safety_req_resp_event);
 
-hdd_exit:
 	hdd_exit();
 }
 

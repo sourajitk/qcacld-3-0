@@ -1104,8 +1104,10 @@ lim_decide_ap_protection(struct mac_context *mac, tSirMacAddr peerMacAddr,
 	sta =
 		dph_lookup_hash_entry(mac, peerMacAddr, &tmpAid,
 				      &pe_session->dph.dphHashTable);
-	if (!sta)
+	if (!sta) {
+		pe_err("sta is NULL");
 		return;
+	}
 	lim_get_rf_band_new(mac, &rfBand, pe_session);
 	/* if we are in 5 GHZ band */
 	if (REG_BAND_5G == rfBand) {
@@ -4881,14 +4883,13 @@ void pe_set_resume_channel(struct mac_context *mac, uint16_t channel,
 bool lim_isconnected_on_dfs_freq(struct mac_context *mac_ctx,
 				 qdf_freq_t oper_freq)
 {
-	/* Indoor channels are also marked DFS, therefore
-	 * check if the channel has REGULATORY_CHAN_RADAR
-	 * channel flag to identify if the channel is DFS
-	 */
-	if (wlan_reg_is_dfs_for_freq(mac_ctx->pdev, oper_freq))
+	if (CHANNEL_STATE_DFS ==
+	    wlan_reg_get_channel_state_for_freq(mac_ctx->pdev,
+						oper_freq)) {
 		return true;
-	else
+	} else {
 		return false;
+	}
 }
 
 void lim_pmf_sa_query_timer_handler(void *pMacGlobal, uint32_t param)
@@ -8063,16 +8064,15 @@ QDF_STATUS lim_populate_he_mcs_set(struct mac_context *mac_ctx,
 #endif
 
 #ifdef WLAN_FEATURE_11BE_MLO
-void lim_update_sta_mlo_info(struct pe_session *session,
-			     tpAddStaParams add_sta_params,
+void lim_update_sta_mlo_info(tpAddStaParams add_sta_params,
 			     tpDphHashNode sta_ds)
 {
-	if (lim_is_mlo_conn(session, sta_ds)) {
+	if (add_sta_params->eht_capable) {
 		WLAN_ADDR_COPY(add_sta_params->mld_mac_addr, sta_ds->mld_addr);
 		add_sta_params->is_assoc_peer = lim_is_mlo_recv_assoc(sta_ds);
 	}
-	pe_debug("is mlo connection: %d mld mac " QDF_MAC_ADDR_FMT " assoc peer %d",
-		 lim_is_mlo_conn(session, sta_ds),
+	pe_debug("eht_capable: %d mld mac " QDF_MAC_ADDR_FMT " assoc peer %d",
+		 add_sta_params->eht_capable,
 		 QDF_MAC_ADDR_REF(add_sta_params->mld_mac_addr),
 		 add_sta_params->is_assoc_peer);
 }
@@ -8136,11 +8136,11 @@ QDF_STATUS lim_send_mlo_caps_ie(struct mac_context *mac_ctx,
 
 	status_2g = lim_send_ie(mac_ctx, vdev_id, DOT11F_EID_MLO_IE,
 				CDS_BAND_2GHZ, &mlo_caps[2],
-				EHT_CAP_OUI_LEN + QDF_MAC_ADDR_SIZE);
+				mlo_cap_total_len);
 
 	status_5g = lim_send_ie(mac_ctx, vdev_id, DOT11F_EID_MLO_IE,
 				CDS_BAND_5GHZ, &mlo_caps[2],
-				EHT_CAP_OUI_LEN + QDF_MAC_ADDR_SIZE);
+				mlo_cap_total_len);
 
 	if (QDF_IS_STATUS_SUCCESS(status_2g) &&
 	    QDF_IS_STATUS_SUCCESS(status_5g)) {
@@ -10035,130 +10035,4 @@ QDF_STATUS lim_pre_vdev_start(struct mac_context *mac,
 				session->ssId.length);
 
 	return lim_set_ch_phy_mode(mlme_obj->vdev, session->dot11mode);
-}
-
-void lim_update_nss(struct mac_context *mac_ctx, tpDphHashNode sta_ds,
-		    uint8_t rx_nss, struct pe_session *session)
-{
-	if (sta_ds->vhtSupportedRxNss != (rx_nss + 1)) {
-		if (session->nss_forced_1x1) {
-			pe_debug("Not Updating NSS for special AP");
-			return;
-		}
-		sta_ds->vhtSupportedRxNss = rx_nss + 1;
-		lim_set_nss_change(mac_ctx, session,
-				   sta_ds->vhtSupportedRxNss,
-				   sta_ds->staAddr);
-	}
-}
-
-bool lim_update_channel_width(struct mac_context *mac_ctx,
-			      tpDphHashNode sta_ptr,
-			      struct pe_session *session,
-			      uint8_t ch_width, uint8_t *new_ch_width)
-{
-	uint8_t cb_mode, oper_mode;
-	uint32_t fw_vht_ch_wd;
-
-	if (wlan_reg_is_24ghz_ch_freq(session->curr_op_freq))
-		cb_mode = mac_ctx->roam.configParam.channelBondingMode24GHz;
-	else
-		cb_mode = mac_ctx->roam.configParam.channelBondingMode5GHz;
-	/*
-	 * Do not update the channel bonding mode if channel bonding
-	 * mode is disabled in INI.
-	 */
-	if (cb_mode == WNI_CFG_CHANNEL_BONDING_MODE_DISABLE) {
-		pe_debug("channel bonding disabled");
-		return false;
-	}
-
-	if (sta_ptr->htSupportedChannelWidthSet) {
-		if (sta_ptr->vhtSupportedChannelWidthSet >
-			WNI_CFG_VHT_CHANNEL_WIDTH_80MHZ)
-			oper_mode = eHT_CHANNEL_WIDTH_160MHZ;
-		else
-			oper_mode = sta_ptr->vhtSupportedChannelWidthSet + 1;
-	} else {
-		oper_mode = eHT_CHANNEL_WIDTH_20MHZ;
-	}
-
-	if (((oper_mode == eHT_CHANNEL_WIDTH_80MHZ) &&
-	    (ch_width > eHT_CHANNEL_WIDTH_80MHZ)) ||
-	    (oper_mode == ch_width))
-		return false;
-
-	fw_vht_ch_wd = wma_get_vht_ch_width();
-
-	pe_debug("ChannelWidth - Current : %d, New: %d mac : " QDF_MAC_ADDR_FMT,
-		 oper_mode, ch_width, QDF_MAC_ADDR_REF(sta_ptr->staAddr));
-
-	if (ch_width >= eHT_CHANNEL_WIDTH_160MHZ &&
-	    (fw_vht_ch_wd >= eHT_CHANNEL_WIDTH_160MHZ)) {
-		sta_ptr->vhtSupportedChannelWidthSet =
-				WNI_CFG_VHT_CHANNEL_WIDTH_160MHZ;
-		sta_ptr->htSupportedChannelWidthSet =
-				eHT_CHANNEL_WIDTH_40MHZ;
-		*new_ch_width = eHT_CHANNEL_WIDTH_160MHZ;
-	} else if (ch_width >= eHT_CHANNEL_WIDTH_80MHZ) {
-		sta_ptr->vhtSupportedChannelWidthSet =
-				WNI_CFG_VHT_CHANNEL_WIDTH_80MHZ;
-		sta_ptr->htSupportedChannelWidthSet =
-				eHT_CHANNEL_WIDTH_40MHZ;
-		*new_ch_width = eHT_CHANNEL_WIDTH_80MHZ;
-	} else if (ch_width == eHT_CHANNEL_WIDTH_40MHZ) {
-		sta_ptr->vhtSupportedChannelWidthSet =
-				WNI_CFG_VHT_CHANNEL_WIDTH_20_40MHZ;
-		sta_ptr->htSupportedChannelWidthSet =
-				eHT_CHANNEL_WIDTH_40MHZ;
-		*new_ch_width = eHT_CHANNEL_WIDTH_40MHZ;
-	} else if (ch_width == eHT_CHANNEL_WIDTH_20MHZ) {
-		sta_ptr->vhtSupportedChannelWidthSet =
-				WNI_CFG_VHT_CHANNEL_WIDTH_20_40MHZ;
-		sta_ptr->htSupportedChannelWidthSet =
-				eHT_CHANNEL_WIDTH_20MHZ;
-		*new_ch_width = eHT_CHANNEL_WIDTH_20MHZ;
-	}
-
-	lim_check_vht_op_mode_change(mac_ctx, session, *new_ch_width,
-				     sta_ptr->staAddr);
-	return true;
-}
-
-uint8_t lim_get_vht_ch_width(tDot11fIEVHTCaps *vht_cap,
-			     tDot11fIEVHTOperation *vht_op,
-			     tDot11fIEHTInfo *ht_info)
-{
-	uint8_t ccfs0, ccfs1, offset;
-	uint8_t ch_width;
-
-	ccfs0 = vht_op->chan_center_freq_seg0;
-	ccfs1 = vht_op->chan_center_freq_seg1;
-	ch_width = vht_op->chanWidth;
-
-	if (ch_width > WNI_CFG_VHT_CHANNEL_WIDTH_80_PLUS_80MHZ) {
-		pe_err("Invalid ch width in vht operation IE %d", ch_width);
-		return WNI_CFG_VHT_CHANNEL_WIDTH_20_40MHZ;
-	}
-
-	if (vht_cap->vht_extended_nss_bw_cap &&
-	    vht_cap->extended_nss_bw_supp && ht_info && ht_info->present)
-		ccfs1 = ht_info->chan_center_freq_seg2;
-
-	/* According to new VHTOP IE definition, vht ch_width will
-	 * be 1 for 80MHz, 160MHz and 80+80MHz.
-	 *
-	 * To get the correct operation ch_width, find center
-	 * frequency difference.
-	 */
-	if (ch_width == WNI_CFG_VHT_CHANNEL_WIDTH_80MHZ && ccfs1) {
-		offset = abs(ccfs0 - ccfs1);
-
-		if (offset == 8)
-			ch_width =  WNI_CFG_VHT_CHANNEL_WIDTH_160MHZ;
-		else if (offset > 16)
-			ch_width = WNI_CFG_VHT_CHANNEL_WIDTH_80_PLUS_80MHZ;
-	}
-	pe_debug("The VHT Operation channel width is %d", ch_width);
-	return ch_width;
 }

@@ -254,16 +254,6 @@ QDF_STATUS
 policy_mgr_get_sta_sap_scc_on_dfs_chnl(struct wlan_objmgr_psoc *psoc,
 				       uint8_t *sta_sap_scc_on_dfs_chnl);
 
-/**
- * policy_mgr_get_sta_sap_scc_allowed_on_indoor_chnl() - Get if STA-SAP scc is
- * allowed on indoor channel
- * @psoc: Global psoc pointer
- *
- * Return: true if STA-SAP SCC on indoor channel is allowed
- */
-bool policy_mgr_get_sta_sap_scc_allowed_on_indoor_chnl(
-				struct wlan_objmgr_psoc *psoc);
-
 /*
  * policy_mgr_get_connected_vdev_band_mask() - to get the connected vdev band
  * mask
@@ -1749,14 +1739,15 @@ struct policy_mgr_cdp_cbacks {
 /**
  * struct policy_mgr_dp_cbacks - CDP Callbacks to be invoked
  * from policy manager
- * @hdd_disable_rx_ol_in_concurrency: Callback to disable LRO/GRO offloads
+ * @hdd_rx_handle_concurrency: Callback to handle concurrency related
+ *  operations for rx
  * @hdd_set_rx_mode_rps_cb: Callback to set RPS
  * @hdd_ipa_set_mcc_mode_cb: Callback to set mcc mode for ipa module
  * @hdd_v2_flow_pool_map: Callback to create vdev flow pool
  * @hdd_v2_flow_pool_unmap: Callback to delete vdev flow pool
  */
 struct policy_mgr_dp_cbacks {
-	void (*hdd_disable_rx_ol_in_concurrency)(bool);
+	void (*hdd_rx_handle_concurrency)(bool);
 	void (*hdd_set_rx_mode_rps_cb)(bool);
 	void (*hdd_ipa_set_mcc_mode_cb)(bool);
 	void (*hdd_v2_flow_pool_map)(int);
@@ -2206,7 +2197,6 @@ QDF_STATUS policy_mgr_get_nss_for_vdev(struct wlan_objmgr_psoc *psoc,
  * @psoc: PSOC object information
  * @sap_ch_freq: sap current frequency in MHz
  * @intf_ch_freq: input/out interference channel frequency to sap
- * @sap_vdev_id: SAP vdev id
  *
  * Gets the mandatory channel for SAP operation
  *
@@ -2215,8 +2205,7 @@ QDF_STATUS policy_mgr_get_nss_for_vdev(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS
 policy_mgr_get_sap_mandatory_channel(struct wlan_objmgr_psoc *psoc,
 				     uint32_t sap_ch_freq,
-				     uint32_t *intf_ch_freq,
-				     uint8_t sap_vdev_id);
+				     uint32_t *intf_ch_freq);
 
 /**
  * policy_mgr_set_sap_mandatory_channels() - Set the mandatory channel for SAP
@@ -3395,7 +3384,6 @@ bool policy_mgr_go_scc_enforced(struct wlan_objmgr_psoc *psoc);
  *
  * This function checks & updates the channel SAP to come up on in
  * case of STA+SAP concurrency
- *
  * Return: Success if SAP can come up on a channel
  */
 QDF_STATUS policy_mgr_valid_sap_conc_channel_check(
@@ -3425,27 +3413,13 @@ bool policy_mgr_sap_allowed_on_indoor_freq(struct wlan_objmgr_psoc *psoc,
  * @psoc: PSOC object information
  * @sap_vdev_id: sap vdev id.
  * @sap_ch_freq: sap channel frequency.
- * @pref_band: Preferred band on channel is required
  *
  * This function returns an alternate channel for SAP to move to
- *
  * Return: The new channel for SAP
  */
 uint32_t policy_mgr_get_alternate_channel_for_sap(
 	struct wlan_objmgr_psoc *psoc, uint8_t sap_vdev_id,
-	uint32_t sap_ch_freq,
-	enum reg_wifi_band pref_band);
-
-/**
- * policy_mgr_con_mode_by_vdev_id() - Get policy mgr con mode from vdev id
- * @psoc: psoc object
- * @vdev_id: vdev id
- *
- * return: enum policy_mgr_con_mode for the vdev id
- */
-enum policy_mgr_con_mode
-policy_mgr_con_mode_by_vdev_id(struct wlan_objmgr_psoc *psoc,
-			       uint8_t vdev_id);
+	uint32_t sap_ch_freq);
 
 /**
  * policy_mgr_disallow_mcc() - Check for mcc
@@ -3618,16 +3592,6 @@ bool policy_mgr_is_special_mode_active_5g(struct wlan_objmgr_psoc *psoc,
 bool policy_mgr_is_sta_connected_2g(struct wlan_objmgr_psoc *psoc);
 
 /**
- * policy_mgr_is_connected_sta_5g() - check if sta connected in 5 GHz
- * @psoc: pointer to soc
- * @freq: Pointer to the frequency on which sta is connected
- *
- * Return: true if sta is connected in 5 GHz else false
- */
-bool policy_mgr_is_connected_sta_5g(struct wlan_objmgr_psoc *psoc,
-				    qdf_freq_t *freq);
-
-/**
  * policy_mgr_scan_trim_5g_chnls_for_dfs_ap() - check if sta scan should skip
  * 5g channel when dfs ap is present.
  *
@@ -3758,15 +3722,14 @@ bool policy_mgr_is_valid_for_channel_switch(struct wlan_objmgr_psoc *psoc,
 					    uint32_t ch_freq);
 
 /**
- * policy_mgr_get_user_config_sap_freq() - Get the user configured channel
+ * policy_mgr_update_user_config_sap_chan() - Update user configured channel
+ * @psoc: poniter to psoc
+ * @ch_freq: channel frequency to be upated
  *
- * @psoc: pointer to psoc
- * @vdev_id: vdev id
- *
- * Return: user configured frequency
- */
-qdf_freq_t policy_mgr_get_user_config_sap_freq(struct wlan_objmgr_psoc *psoc,
-					       uint8_t vdev_id);
+ * Return: void
+ **/
+void policy_mgr_update_user_config_sap_chan(struct wlan_objmgr_psoc *psoc,
+					    uint32_t ch_freq);
 
 /**
  * policy_mgr_nan_sap_post_enable_conc_check() - Do concurrency operations
@@ -4247,28 +4210,4 @@ void policy_mgr_set_dbs_cap_ut(struct wlan_objmgr_psoc *psoc, uint32_t dbs);
 static inline void
 policy_mgr_set_dbs_cap_ut(struct wlan_objmgr_psoc *psoc, uint32_t dbs) {}
 #endif
-
-/**
- * policy_mgr_get_connected_roaming_vdev_band_mask() - get connected vdev
- * band mask
- * @psoc: PSOC object
- * @vdev_id: Vdev id
- *
- * Return: reg wifi band mask
- */
-uint32_t
-policy_mgr_get_connected_roaming_vdev_band_mask(struct wlan_objmgr_psoc *psoc,
-						uint8_t vdev_id);
-
-/**
- * policy_mgr_is_sta_chan_valid_for_connect_and_roam  - Check if given
- * channel is valid for STA connection/roam pcl channels
- * @pdev: pdev
- * @freq: frequency
- *
- * Return: true if channel is valid else false
- */
-bool policy_mgr_is_sta_chan_valid_for_connect_and_roam(
-					struct wlan_objmgr_pdev *pdev,
-					qdf_freq_t freq);
 #endif /* __WLAN_POLICY_MGR_API_H */

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -29,31 +28,15 @@
 #include "wmi_unified.h"
 
 #ifdef WLAN_FEATURE_ELNA
-
-/**
- * enum fwol_extlna_mode - provides elna modes
- * @EXTLNA_MODE_DISABLE_ELNA_BYPASS - disables elna bypass
- * @EXTLNA_MODE_ENABLE_ELNA_BYPASS  - enables elna bypass
- * @EXTLNA_MODE_FIRMWARE_DEFAULT    - Reset eLNA bypass configuration,
- *                                    the driver should revert to the default
- *                                    configuration of eLNA bypass
- */
-enum fwol_extlna_mode {
-	EXTLNA_MODE_DISABLE_ELNA_BYPASS = 0,
-	EXTLNA_MODE_ENABLE_ELNA_BYPASS,
-	EXTLNA_MODE_FIRMWARE_DEFAULT,
-};
-
 /**
  * struct set_elna_bypass_request - set eLNA bypass request
  * @vdev_id: vdev id
- * @elna_mode:0 - disable eLNA bypass
- *            1 - enable eLNA bypass
- *            2 - firmware default
+ * @en_dis: 0 - disable eLNA bypass
+ *          1 - enable eLNA bypass
  */
 struct set_elna_bypass_request {
 	uint8_t vdev_id;
-	enum fwol_extlna_mode elna_mode;
+	uint8_t en_dis;
 };
 
 /**
@@ -67,13 +50,12 @@ struct get_elna_bypass_request {
 /**
  * struct get_elna_bypass_response - get eLNA bypass response
  * @vdev_id: vdev id
- * @elna_mode:0 - disable eLNA bypass
- *            1 - enable eLNA bypass
- *            2 - firmware default
+ * @en_dis: 0 - disable eLNA bypass
+ *          1 - enable eLNA bypass
  */
 struct get_elna_bypass_response {
 	uint8_t vdev_id;
-	enum fwol_extlna_mode elna_mode;
+	uint8_t en_dis;
 };
 #endif
 

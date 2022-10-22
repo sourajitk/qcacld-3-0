@@ -1080,8 +1080,8 @@ __lim_handle_sme_start_bss_request(struct mac_context *mac_ctx, uint32_t *msg_bu
 
 		/* Initialize 11h Enable Flag */
 		session->lim11hEnable = 0;
-		if (CHAN_HOP_ALL_BANDS_ENABLE ||
-		    (session->limRFBand != REG_BAND_2G)) {
+		if ((CHAN_HOP_ALL_BANDS_ENABLE ||
+		     REG_BAND_5G == session->limRFBand)) {
 			session->lim11hEnable =
 				mac_ctx->mlme_cfg->gen.enabled_11h;
 
@@ -3168,7 +3168,7 @@ lim_fill_pe_session(struct mac_context *mac_ctx, struct pe_session *session,
 	session->limRFBand = lim_get_rf_band(session->curr_op_freq);
 
 	/* Initialize 11h Enable Flag */
-	if (session->limRFBand != REG_BAND_2G)
+	if (session->limRFBand == REG_BAND_5G)
 		session->lim11hEnable =
 			mac_ctx->mlme_cfg->gen.enabled_11h;
 	else
@@ -4964,8 +4964,7 @@ void lim_parse_tpe_ie(struct mac_context *mac, struct pe_session *session,
 
 		ch_params.ch_width = CH_WIDTH_20MHZ;
 
-		for (i = 0; i < single_tpe.max_tx_pwr_count + 1 &&
-		     (ch_params.ch_width != CH_WIDTH_INVALID); i++) {
+		for (i = 0; i < single_tpe.max_tx_pwr_count + 1; i++) {
 			wlan_reg_set_channel_params_for_freq(mac->pdev,
 							     curr_op_freq, 0,
 							     &ch_params);
@@ -4977,9 +4976,8 @@ void lim_parse_tpe_ie(struct mac_context *mac, struct pe_session *session,
 			vdev_mlme->reg_tpc_obj.frequency[i] =
 							ch_params.mhz_freq_seg0;
 			vdev_mlme->reg_tpc_obj.tpe[i] = single_tpe.tx_power[i];
-			if (ch_params.ch_width != CH_WIDTH_INVALID)
-				ch_params.ch_width =
-					get_next_higher_bw[ch_params.ch_width];
+			ch_params.ch_width =
+				get_next_higher_bw[ch_params.ch_width];
 		}
 	}
 
@@ -5158,8 +5156,6 @@ void lim_calculate_tpc(struct mac_context *mac,
 	struct vdev_mlme_obj *mlme_obj;
 	uint8_t tpe_power;
 	bool skip_tpe = false;
-	bool rf_test_mode = false;
-	bool safe_mode_enable = false;
 
 	mlme_obj = wlan_vdev_mlme_get_cmpt_obj(session->vdev);
 	if (!mlme_obj) {
@@ -5189,25 +5185,13 @@ void lim_calculate_tpc(struct mac_context *mac,
 		/* Power mode calculation for 6G*/
 		ap_power_type_6g = session->ap_power_type;
 		if (LIM_IS_STA_ROLE(session)) {
-			wlan_mlme_get_safe_mode_enable(mac->psoc,
-						       &safe_mode_enable);
-			wlan_mlme_is_rf_test_mode_enabled(mac->psoc,
-							  &rf_test_mode);
-			/*
-			 * set LPI power if safe mode is enabled OR RF test
-			 * mode is enabled.
-			 */
-			if (rf_test_mode || safe_mode_enable) {
-				ap_power_type_6g = REG_INDOOR_AP;
+			if (!session->lim_join_req) {
+				if (!ctry_code_match)
+					ap_power_type_6g = ap_pwr_type;
 			} else {
-				if (!session->lim_join_req) {
-					if (!ctry_code_match)
-						ap_power_type_6g = ap_pwr_type;
-				} else {
-					if (!session->same_ctry_code)
-						ap_power_type_6g =
+				if (!session->same_ctry_code)
+					ap_power_type_6g =
 						session->ap_power_type_6g;
-				}
 			}
 		}
 	}
@@ -5222,9 +5206,7 @@ void lim_calculate_tpc(struct mac_context *mac,
 
 	ch_params.ch_width = CH_WIDTH_20MHZ;
 
-	for (i = 0;
-		i < num_pwr_levels && (ch_params.ch_width != CH_WIDTH_INVALID);
-		i++) {
+	for (i = 0; i < num_pwr_levels; i++) {
 		if (is_tpe_present) {
 			if (is_6ghz_freq) {
 				wlan_reg_get_client_power_for_connecting_ap(
@@ -5242,9 +5224,8 @@ void lim_calculate_tpc(struct mac_context *mac,
 					mac->pdev, oper_freq, 0, &ch_params);
 				mlme_obj->reg_tpc_obj.frequency[i] =
 					ch_params.mhz_freq_seg0;
-				if (ch_params.ch_width != CH_WIDTH_INVALID)
-					ch_params.ch_width =
-						get_next_higher_bw[ch_params.ch_width];
+				ch_params.ch_width =
+					get_next_higher_bw[ch_params.ch_width];
 			}
 			if (is_6ghz_freq) {
 				if (LIM_IS_STA_ROLE(session)) {
@@ -8245,7 +8226,7 @@ static void lim_process_sme_channel_change_request(struct mac_context *mac_ctx,
 
 	/* Initialize 11h Enable Flag */
 	if (CHAN_HOP_ALL_BANDS_ENABLE ||
-	    session_entry->limRFBand != REG_BAND_2G)
+	    session_entry->limRFBand == REG_BAND_5G)
 		session_entry->lim11hEnable =
 			mac_ctx->mlme_cfg->gen.enabled_11h;
 	else

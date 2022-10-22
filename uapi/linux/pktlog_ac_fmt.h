@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -20,7 +19,7 @@
 #ifndef _PKTLOG_FMT_H_
 #define _PKTLOG_FMT_H_
 
-#if defined(CONNECTIVITY_PKTLOG) || !defined(REMOVE_PKT_LOG)
+#ifndef REMOVE_PKT_LOG
 
 #define CUR_PKTLOG_VER          10010   /* Packet log version */
 #define PKTLOG_MAGIC_NUM        7735225
@@ -309,7 +308,6 @@ struct ath_pktlog_buf {
  * @TX_DATA_PKT: TX data Packet
  * @RX_MGMT_PKT: RX management Packet
  * @RX_DATA_PKT: RX data Packet
- * @INVALID_PKT: Invalid packet
  *
  * This enum has packet types
  */
@@ -320,7 +318,6 @@ enum pkt_type {
 	TX_DATA_PKT,
 	RX_MGMT_PKT,
 	RX_DATA_PKT,
-	INVALID_PKT,
 };
 
 /**

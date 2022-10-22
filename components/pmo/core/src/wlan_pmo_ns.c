@@ -232,6 +232,11 @@ static QDF_STATUS pmo_core_ns_offload_sanity(struct wlan_objmgr_vdev *vdev)
 		return QDF_STATUS_E_INVAL;
 	}
 
+	if (!vdev_ctx->pmo_psoc_ctx->psoc_cfg.ns_offload_enable_dynamic) {
+		pmo_debug("ns offload dynamically disable");
+		return QDF_STATUS_E_INVAL;
+	}
+
 	if (!pmo_core_is_vdev_supports_offload(vdev)) {
 		pmo_debug("vdev in invalid opmode for ns offload %d",
 			pmo_get_vdev_opmode(vdev));
@@ -372,7 +377,6 @@ QDF_STATUS pmo_core_enable_ns_offload_in_fwr(struct wlan_objmgr_vdev *vdev,
 {
 	QDF_STATUS status;
 	struct pmo_vdev_priv_obj *vdev_ctx;
-	struct pmo_psoc_priv_obj *pmo_psoc_ctx;
 	uint8_t vdev_id;
 
 	if (!vdev) {
@@ -386,7 +390,6 @@ QDF_STATUS pmo_core_enable_ns_offload_in_fwr(struct wlan_objmgr_vdev *vdev,
 		goto out;
 
 	vdev_ctx = pmo_vdev_get_priv(vdev);
-	pmo_psoc_ctx = vdev_ctx->pmo_psoc_ctx;
 
 	status = pmo_core_ns_offload_sanity(vdev);
 	if (status != QDF_STATUS_SUCCESS)
@@ -394,15 +397,15 @@ QDF_STATUS pmo_core_enable_ns_offload_in_fwr(struct wlan_objmgr_vdev *vdev,
 
 	if (trigger == pmo_ns_offload_dynamic_update) {
 		/*
-		 * user enable ns offload using ioctl/vendor cmd dynamically.
+		 * user disable ns offload using ioctl/vendor cmd dynamically.
 		 */
-		pmo_psoc_ctx->psoc_cfg.ns_offload_enable_dynamic = true;
+		vdev_ctx->pmo_psoc_ctx->psoc_cfg.ns_offload_enable_dynamic =
+			true;
 		goto skip_ns_dynamic_check;
 	}
 
-	if (!pmo_psoc_ctx->psoc_cfg.ns_offload_enable_dynamic) {
+	if (!vdev_ctx->pmo_psoc_ctx->psoc_cfg.ns_offload_enable_dynamic) {
 		pmo_debug("ns offload dynamically disable");
-		status = QDF_STATUS_E_INVAL;
 		goto dec_ref;
 	}
 
@@ -433,7 +436,6 @@ QDF_STATUS pmo_core_disable_ns_offload_in_fwr(struct wlan_objmgr_vdev *vdev,
 	QDF_STATUS status;
 	uint8_t vdev_id;
 	struct pmo_vdev_priv_obj *vdev_ctx;
-	struct pmo_psoc_priv_obj *pmo_psoc_ctx;
 
 	pmo_enter();
 	if (!vdev) {
@@ -447,7 +449,6 @@ QDF_STATUS pmo_core_disable_ns_offload_in_fwr(struct wlan_objmgr_vdev *vdev,
 		goto out;
 
 	vdev_ctx = pmo_vdev_get_priv(vdev);
-	pmo_psoc_ctx = vdev_ctx->pmo_psoc_ctx;
 
 	status = pmo_core_ns_offload_sanity(vdev);
 	if (status != QDF_STATUS_SUCCESS)
@@ -457,19 +458,13 @@ QDF_STATUS pmo_core_disable_ns_offload_in_fwr(struct wlan_objmgr_vdev *vdev,
 		/*
 		 * user disable ns offload using ioctl/vendor cmd dynamically.
 		 */
-		if (!pmo_psoc_ctx->psoc_cfg.ns_offload_enable_dynamic) {
-			/* Already disabled, skip to end */
-			status = QDF_STATUS_SUCCESS;
-			goto dec_ref;
-		}
-
-		pmo_psoc_ctx->psoc_cfg.ns_offload_enable_dynamic = false;
+		vdev_ctx->pmo_psoc_ctx->psoc_cfg.ns_offload_enable_dynamic =
+			false;
 		goto skip_ns_dynamic_check;
 	}
 
-	if (!pmo_psoc_ctx->psoc_cfg.ns_offload_enable_dynamic) {
+	if (!vdev_ctx->pmo_psoc_ctx->psoc_cfg.ns_offload_enable_dynamic) {
 		pmo_debug("ns offload dynamically disable");
-		status = QDF_STATUS_E_INVAL;
 		goto dec_ref;
 	}
 
